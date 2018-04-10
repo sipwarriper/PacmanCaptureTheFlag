@@ -56,7 +56,7 @@ class ReflexCaptureAgent(CaptureAgent):
 
         foodLeft = len(self.getFood(gameState).asList())
         # TODO edit this part of code to get the sir pacman move using more his brain lmao
-        if foodLeft <= 2:
+        if (foodLeft <= 2) or (gameState.getAgentState(self.index).numCarrying >= POINTSB4RETURN):
             bestDist = 9999
             for action in actions:
                 successor = self.getSuccessor(gameState, action)
@@ -68,7 +68,6 @@ class ReflexCaptureAgent(CaptureAgent):
             return bestAction
 
         return random.choice(bestActions)
-        return random.choice(actions)
 
     def getSuccessor(self, gameState, action):
         """
@@ -120,6 +119,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         foodList = self.getFood(successor).asList()
         carrying = myState.numCarrying
         features['successorScore'] = -len(foodList)  # self.getScore(successor)
+        features['onOffense'] = 1 if myState.isPacman else 0
         # need to calculate de distance to enemies.
         myTeam = successor.isOnRedTeam(self.index)
         if myTeam:
@@ -128,31 +128,14 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
             enemyTeam = successor.getBlueTeamIndices()
         defendersCount = 0
         distanceFromDefenders = 0
-        for enemy in enemyTeam:
-            if (not successor.getAgentState(enemy).isPacman) and (successor.getAgentState(enemy).scaredTimer > 0):
-                defendersCount += 1  # we ignore the scared defenders at the moment, they can't harm us
-                pos = successor.getAgentPosition(enemy)
-                if pos is not None:
-                    distanceFromDefenders += self.getMazeDistance(pos, myState.getPosition())
-        features['distanceToEnemies'] = distanceFromDefenders
-
-        # calculates if we are heading home.
-
-        distanceHomeOriginal = self.getMazeDistance(gameState.getAgentState(self.index).getPosition(),
-                                                    gameState.getInitialAgentPosition(self.index))
-        distanceHomeSuccessor = self.getMazeDistance(myState.getPosition(),
-                                                     successor.getInitialAgentPosition(self.index))
-
-        # calculate the value of returning to home
         if (myState.isPacman):
-            if (distanceHomeOriginal > distanceHomeSuccessor) and (defendersCount == 1) and (carrying >= POINTSB4RETURN*2):
-                features['valueReturning'] = 10000+(carrying + POINTSB4RETURN*2)
-            elif (distanceHomeOriginal > distanceHomeSuccessor) and (defendersCount == 2) and (carrying >= POINTSB4RETURN):
-                features['valueReturning'] = 20000+(carrying + POINTSB4RETURN)
-            else:
-                features['valueReturning'] = 0
-        else:
-            features['valueReturning'] = 0
+            for enemy in enemyTeam:
+                if (not successor.getAgentState(enemy).isPacman) and (successor.getAgentState(enemy).scaredTimer == 0):
+                    defendersCount += 1  # we ignore the scared defenders at the moment, they can't harm us
+                    pos = successor.getAgentPosition(enemy)
+                    if pos is not None:
+                        distanceFromDefenders += self.getMazeDistance(pos, myState.getPosition())
+        features['distanceToEnemies'] = distanceFromDefenders
 
         if len(foodList) > 0:  # This should always be True,  but better safe than sorry
             myPos = myState.getPosition()
@@ -161,7 +144,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         return features
 
     def getWeights(self, gameState, action):
-        return {'successorScore': 100, 'distanceToFood': -1, 'distanceToEnemies': 200, 'valueReturning': 10000}
+        return {'successorScore': 100, 'distanceToFood': -1, 'distanceToEnemies': 1, 'onOffense': 100}
 
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
