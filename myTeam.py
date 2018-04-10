@@ -56,7 +56,16 @@ class ReflexCaptureAgent(CaptureAgent):
 
         foodLeft = len(self.getFood(gameState).asList())
         # TODO edit this part of code to get the sir pacman move using more his brain lmao
-        if (foodLeft <= 2) or (gameState.getAgentState(self.index).numCarrying >= POINTSB4RETURN):
+        myTeam = gameState.isOnRedTeam(self.index)
+        if myTeam:
+            enemyTeam = gameState.getRedTeamIndices()
+        else:
+            enemyTeam = gameState.getBlueTeamIndices()
+        defendersCount = 0
+        for enemy in enemyTeam:
+            if (not gameState.getAgentState(enemy).isPacman) and (gameState.getAgentState(enemy).scaredTimer == 0):
+                defendersCount += 1  # we ignore the scared defenders at the moment, they can't harm us
+        if (foodLeft <= 2) or (gameState.getAgentState(self.index).numCarrying >= POINTSB4RETURN and defendersCount>0):
             bestDist = 9999
             for action in actions:
                 successor = self.getSuccessor(gameState, action)
