@@ -126,7 +126,6 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         successor = self.getSuccessor(gameState, action)
         myState = successor.getAgentState(self.index)
         foodList = self.getFood(successor).asList()
-        carrying = myState.numCarrying
         features['successorScore'] = -len(foodList)  # self.getScore(successor)
         features['onOffense'] = 1 if myState.isPacman else 0
         # need to calculate de distance to enemies.
@@ -165,9 +164,10 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
   """
 
     def getFeatures(self, gameState, action):
+        global dists
         features = util.Counter()
         successor = self.getSuccessor(gameState, action)
-
+        foodList = self.getFoodYouAreDefending(successor).asList()
         myState = successor.getAgentState(self.index)
         myPos = myState.getPosition()
 
@@ -176,7 +176,8 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
         if myState.isPacman:
             features['onDefense'] = 0
 
-        features['scared'] = 1 if myState.scaredTimer > 0 else 0
+        features['scared'] = 1 if myState.scaredTimer == 40 else 0
+
         # Computes distance to invaders we can see
         enemies = [successor.getAgentState(i) for i in self.getOpponents(successor)]
         invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
@@ -184,13 +185,23 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
         if len(invaders) > 0:
             dists = [self.getMazeDistance(myPos, a.getPosition()) for a in invaders]
             features['invaderDistance'] = min(dists)
-        if action == Directions.STOP: features['stop'] = 1
+        if action == Directions.STOP:
+            features['stop'] = 1
         rev = Directions.REVERSE[gameState.getAgentState(self.index).configuration.direction]
         if action == rev:
             features['reverse'] = 1
 
+        if len(foodList) > 0:  # This should always be True,  but better safe than sorry
+            myPos = myState.getPosition()
+            minDistance = min([self.getMazeDistance(myPos, food) for food in foodList])
+            features['distanceToFood'] = minDistance
+        if len(invaders) > 0: features['distanceToFood']=0
+        return features
+        #
+        # if (15 > myState.scaredTimer > 0 and min(dists) < 5) or (myState.scaredTimer > 15 and min(dists) < 2):
+        #     features['invadersDistance'] *= -0.1
         return features
 
     def getWeights(self, gameState, action):
-        return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -10, 'stop': -100, 'reverse': -2,
-                'scared': -10}
+        return {'numInvaders': -10000, 'onDefense': 1000, 'invaderDistance': -100, 'stop': -1000, 'reverse': -2,
+                'scared': -10, 'distanceToFood': -10}
