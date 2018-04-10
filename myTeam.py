@@ -1,25 +1,3 @@
-# baselineTeam.py
-# ---------------
-# Licensing Information:  You are free to use or extend these projects for
-# educational purposes provided that (1) you do not distribute or publish
-# solutions, (2) you retain this notice, and (3) you provide clear
-# attribution to UC Berkeley, including a link to http://ai.berkeley.edu.
-#
-# Attribution Information: The Pacman AI projects were developed at UC Berkeley.
-# The core projects and autograders were primarily created by John DeNero
-# (denero@cs.berkeley.edu) and Dan Klein (klein@cs.berkeley.edu).
-# Student side autograding was added by Brad Miller, Nick Hay, and
-# Pieter Abbeel (pabbeel@cs.berkeley.edu).
-
-
-# baselineTeam.py
-# ---------------
-# Licensing Information: Please do not distribute or publish solutions to this
-# project. You are free to use and extend these projects for educational
-# purposes. The Pacman AI projects were developed at UC Berkeley, primarily by
-# John DeNero (denero@cs.berkeley.edu) and Dan Klein (klein@cs.berkeley.edu).
-# For more info, see http://inst.eecs.berkeley.edu/~cs188/sp09/pacman.html
-
 from captureAgents import CaptureAgent
 import distanceCalculator
 import random, time, util, sys
@@ -39,17 +17,15 @@ def createTeam(firstIndex, secondIndex, isRed,
   team, initialized using firstIndex and secondIndex as their agent
   index numbers.  isRed is True if the red team is being created, and
   will be False if the blue team is being created.
-
-  As a potentially helpful development aid, this function can take
-  additional string-valued keyword arguments ("first" and "second" are
-  such arguments in the case of this function), which will come from
-  the --redOpts and --blueOpts command-line arguments to capture.py.
-  For the nightly contest, however, your team will be created without
-  any extra arguments, so you should make sure that the default
-  behavior is what you want for the nightly contest.
   """
     return [eval(first)(firstIndex), eval(second)(secondIndex)]
 
+
+#############
+# CONSTANTS #
+#############
+
+POINTSB4RETURN = 3  # number of points we want to recollect with the Offensive Agent before he returns to our territory
 
 ##########
 # Agents #
@@ -79,7 +55,7 @@ class ReflexCaptureAgent(CaptureAgent):
         bestActions = [a for a, v in zip(actions, values) if v == maxValue]
 
         foodLeft = len(self.getFood(gameState).asList())
-
+        # TODO edit this part of code to get the sir pacman move using more his brain lmao
         if foodLeft <= 2:
             bestDist = 9999
             for action in actions:
@@ -92,6 +68,7 @@ class ReflexCaptureAgent(CaptureAgent):
             return bestAction
 
         return random.choice(bestActions)
+        return random.choice(actions)
 
     def getSuccessor(self, gameState, action):
         """
@@ -136,23 +113,55 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
   we give you to get an idea of what an offensive agent might look like,
   but it is by no means the best or only way to build an offensive agent.
   """
-
     def getFeatures(self, gameState, action):
         features = util.Counter()
         successor = self.getSuccessor(gameState, action)
+        myState = successor.getAgentState(self.index)
         foodList = self.getFood(successor).asList()
+        carrying = myState.numCarrying
         features['successorScore'] = -len(foodList)  # self.getScore(successor)
+        # need to calculate de distance to enemies.
+        myTeam = successor.isOnRedTeam(self.index)
+        if myTeam:
+            enemyTeam = successor.getRedTeamIndices()
+        else:
+            enemyTeam = successor.getBlueTeamIndices()
+        defendersCount = 0
+        distanceFromDefenders = 0
+        for enemy in enemyTeam:
+            if (not successor.getAgentState(enemy).isPacman) and (successor.getAgentState(enemy).scaredTimer > 0):
+                defendersCount += 1  # we ignore the scared defenders at the moment, they can't harm us
+                pos = successor.getAgentPosition(enemy)
+                if pos is not None:
+                    distanceFromDefenders += self.getMazeDistance(pos, myState.getPosition())
+        features['distanceToEnemies'] = distanceFromDefenders
 
-        # Compute distance to the nearest food
+        # calculates if we are heading home.
+
+        distanceHomeOriginal = self.getMazeDistance(gameState.getAgentState(self.index).getPosition(),
+                                                    gameState.getInitialAgentPosition(self.index))
+        distanceHomeSuccessor = self.getMazeDistance(myState.getPosition(),
+                                                     successor.getInitialAgentPosition(self.index))
+
+        # calculate the value of returning to home
+        if (myState.isPacman):
+            if (distanceHomeOriginal > distanceHomeSuccessor) and (defendersCount == 1) and (carrying >= POINTSB4RETURN*2):
+                features['valueReturning'] = 10000+(carrying + POINTSB4RETURN*2)
+            elif (distanceHomeOriginal > distanceHomeSuccessor) and (defendersCount == 2) and (carrying >= POINTSB4RETURN):
+                features['valueReturning'] = 20000+(carrying + POINTSB4RETURN)
+            else:
+                features['valueReturning'] = 0
+        else:
+            features['valueReturning'] = 0
 
         if len(foodList) > 0:  # This should always be True,  but better safe than sorry
-            myPos = successor.getAgentState(self.index).getPosition()
+            myPos = myState.getPosition()
             minDistance = min([self.getMazeDistance(myPos, food) for food in foodList])
             features['distanceToFood'] = minDistance
         return features
 
     def getWeights(self, gameState, action):
-        return {'successorScore': 100, 'distanceToFood': -1}
+        return {'successorScore': 100, 'distanceToFood': -1, 'distanceToEnemies': 200, 'valueReturning': 10000}
 
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
